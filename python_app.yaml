@@ -1,66 +1,54 @@
 ---
     - name: Deploy a Python Web Application
-      hosts: app
-      become: yes
+      hosts: app2
+      become: true
+      become_user: root
       tasks:
         - name: Install All required Dependencies
-          yum:
-            name: "{{ item }}"
+          apt:
+            name: ['python', 'python-setuptools', 'python-dev', 'build-essential', 'python-pip', 'python-mysqldb']
             state: present
-          with_items:
-            - "python"
-            - "python-devel"
+          when: ansible_os_family == "Debian"
 
 #        - name: Downloading mysql repo
-#          yum: 
+#          yum:
 #            name: "http//repo.mysql.com/mysql-community-release-el7-5.noarch.rpm"
 #            state: present
 
-        - name: Installing Mysql DB Service          
-          yum:
-            name: "{{ item }}"
+        - name: Installing Mysql DB Service
+          apt:
+            name: ['mysql-server', 'mysql-client', 'mysql-common']
             state: present
-          with_items:
-            - "mysql-server"
-            - "mysql-devel"
-           
+
+        - name: Start Mysql Database
+          service:
+            name: mysql
+            state: started
+            enabled: yes
+
+        - name: Install Pip
+          apt:
+           name: "python-pip"
+           state: present
+
+        - name: Installing Flask libraries
+          pip:
+            name: ['flask', 'flask-mysql']
+            state: present
+
         - name: create MySQL configuration file
           copy:
             content: |
               [client]
-               user=root
-               password="@targ8et"
-            dest: "/etc/.my.cnf"
-        
-        - name: Start Mysql Database
-          service:
-            name: mysqld
-            state: started
-            enabled: yes
+              user=root
+              password="@targ8et"
+            dest: "/root/.my.cnf"
 
-#        - name : Install Mysql-python package
-#          yum:
-#            name: MYSQL-python
-#            state: present
-
-        - name: Install Pip
-          yum:
-            name: "python-pip"
-            state: present
-
-        - name: Installing Flask libraries
-          pip: 
-            name: "{{ item }}"
-            state: present
-          with_items:
-            - "flask"
-            - "flask-mysql"
-
-        - name: Creat appation Database
+        - name: Create a new database with name 'employees_db'
           mysql_db:
-            name: employee_db
+            name: employees_db
             state: present
-        
+
         - name: Creat Mysql User
           mysql_user:
             name: db_user
@@ -70,16 +58,18 @@
 
         - name: Copy Source DB file
           copy:
-            src: employees.sql
+            src: /home/ubuntu/simple-webapp/employees.sql
             dest: /opt/employees.sql
+            remote_src: yes
 
         - name: Importing DB file
-          shell: mysql employee_db < /opt/employees.sql
+          shell: mysql employees_db < /opt/employees.sql
 
         - name : Copy Python Source Code
           copy:
-            src: app.py
+            src: /home/ubuntu/simple-webapp/app.py
             dest: /opt/app.py
-        
+            remote_src : yes
+
         - name: Start Flask service
           shell: FLASK_APP=/opt/app.py nohup flask run --host=0.0.0.0 &
